@@ -24,4 +24,5 @@ Thumbs.db
 *_login.png
 *_profile.png
 *_story.mp4
-test-results/ 
+test-results/
+error_*.png # Ignore error screenshots 

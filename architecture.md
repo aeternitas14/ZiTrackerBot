@@ -70,11 +70,13 @@ root/
 - Saves tracking data to Supabase.
 
 ### Story Scraper (`apps/scraper/`)
+- `index.js` - Main entry point, Instagram login/API functions, and starts the monitoring job.
+- `jobs/monitor.js` - Contains the main loop that runs periodically to check for new stories from all tracked accounts. It fetches tracked accounts, checks stories, and triggers downloads and notifications.
+- `jobs/downloader.js` - Handles the actual downloading of story media (videos/images) and uploading them to file storage (e.g., Supabase Storage).
+- `services/supabase.js` - A dedicated module for initializing the Supabase client and housing all Supabase-related functions for the scraper (e.g., fetching tracked accounts, logging stories).
+- `services/telegram.js` - A module responsible for sending notifications to the Telegram bot, likely by making an HTTP request to an endpoint on the bot or directly using the Telegram Bot API if the scraper has its own bot token for this.
 - Runs on a schedule (every few minutes).
-- Logs into Instagram using Playwright.
-- Checks if tracked users posted a new story (using Instagram's internal API endpoints for better reliability).
-- Downloads and uploads it to file storage.
-- Notifies the Telegram bot to send alert.
+- Logs into Instagram using Playwright (managed by `index.js` or a dedicated auth module).
 
 ### Supabase
 - **Auth**: manages Telegram user auth and linking to their tracking data.
