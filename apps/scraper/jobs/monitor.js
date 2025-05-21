@@ -55,11 +55,16 @@ async function runChecks() {
             // TODO: Task #15: Upload to file storage
             // TODO: Task #16: Add story log entry to Supabase (for persistence across restarts)
 
-            const message = `📢 New story from @${username}!\nType: ${story.type}\nPosted: ${new Date(story.timestamp * 1000).toLocaleString()}`;
+            // Sarcastic notification message
+            const storyTimestamp = new Date(story.timestamp * 1000);
+            const storyTime = storyTimestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute:'2-digit', hour12: true });
+            const storyDate = storyTimestamp.toLocaleDateString('en-US');
+
+            const message = `Psst! Your "target" @${username} just did something utterly predictable: they posted a story. 🙄\nIt's a ${story.type}, posted around ${storyTime} on ${storyDate}.\nDon't you have anything better to do than wait for this? Well, anyway, there's your "intel".`;
             // Add media URL once downloaded & uploaded: \n[View Story](${story.url}) - direct link for now, will be storage link
 
             for (const telegramId of subscribers) {
-              console.log(`Notifying user ${telegramId} about new story from ${username}`);
+              console.log(`Notifying user ${telegramId} about new story from ${username} (Story ID: ${story.id})`);
               await sendTelegramNotification(telegramId, message, { parse_mode: 'Markdown' });
             }
             processedStoryIds.add(storyId); // Mark as processed for this session
