@@ -25,4 +25,4 @@ Thumbs.db
 *_profile.png
 *_story.mp4
 test-results/
-apps/scraper/error_*.png # Ignore scraper-specific error screenshots 
+error_*.png # Ignore error screenshots from the project root 
