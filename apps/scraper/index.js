@@ -1,4 +1,5 @@
 require('dotenv').config({ path: '../../.env' });
+console.log('Password loaded from .env:', process.env.INSTAGRAM_PASSWORD); // Temporary debug line
 const { chromium } = require('playwright');
 const fs = require('fs').promises;
 const path = require('path');
@@ -140,23 +141,24 @@ async function getInstagramHeaders(page) {
   const cookies = await page.context().cookies();
   const cookieString = cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
   
-  const xIgAppId = await page.evaluate(() => {
-    const appIdMeta = document.querySelector('meta[property="al:ios:app_store_id"]');
-    return appIdMeta ? appIdMeta.content : '936619743392459'; // Default fallback
-  });
+  // const xIgAppId = await page.evaluate(() => {
+  //   const appIdMeta = document.querySelector('meta[property="al:ios:app_store_id"]');
+  //   return appIdMeta ? appIdMeta.content : '936619743392459'; // Default fallback
+  // });
 
   return {
-    'accept': '*/*',
-    'accept-language': 'en-US,en;q=0.9',
+    'Accept': '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
     'origin': 'https://www.instagram.com',
     'referer': 'https://www.instagram.com/',
     'sec-fetch-dest': 'empty',
     'sec-fetch-mode': 'cors',
     'sec-fetch-site': 'same-site',
-    'user-agent': await page.evaluate(() => navigator.userAgent),
-    'x-asbd-id': '129477', // Common header
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+    'x-asbd-id': '129477', // Common header, can be kept or reviewed
     'x-csrftoken': cookies.find(c => c.name === 'csrftoken')?.value || '',
-    'x-ig-app-id': xIgAppId,
+    'x-ig-app-id': '936619743392459', // Hardcoded as per suggestion
     'x-ig-www-claim': await page.evaluate(() => (window._sharedData?.rollout_hash || Math.random().toString())),
     'x-requested-with': 'XMLHttpRequest',
     'cookie': cookieString
@@ -295,7 +297,7 @@ async function loginToInstagram() {
     args: ['--disable-blink-features=AutomationControlled']
   });
   const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
     viewport: { width: 1280, height: 800 }
   });
   page = await context.newPage();
