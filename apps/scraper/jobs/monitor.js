@@ -1,14 +1,18 @@
 // apps/scraper/jobs/monitor.js
 console.log('Monitor job loaded'); 
 
-const { getTrackedUsersAndAccounts } = require('../services/supabase');
+const { getTrackedUsersAndAccounts, removeTrackedAccountGlobally } = require('../services/supabase');
 const { sendTelegramNotification } = require('../services/telegram');
 // We will import checkUserStories & getInstagramHeaders from index.js, which now exports them
 // This creates a slight circular dependency if monitor.js is imported by index.js at the top level before index.js exports are ready.
 // We'll manage this by ensuring index.js calls startMonitoring after its own setup.
 
-const MONITORING_INTERVAL_MS = 1 * 60 * 1000; // Check every 1 minute for now
+const MONITORING_INTERVAL_MS = 2 * 60 * 1000; // Check every 2 minutes
 const processedStoryIds = new Set(); // In-memory set to track notified stories (clears on restart)
+
+// For tracking consecutive failures for invalid/inaccessible users
+const consecutiveFailureCounts = {};
+const MAX_CONSECUTIVE_FAILURES = 3; // Remove after 3 consecutive "user not found" errors
 
 let igPage = null;
 let checkUserStoriesFn = null;
@@ -22,7 +26,7 @@ async function runChecks() {
   }
 
   console.log(`[${new Date().toISOString()}] Running story checks...`);
-  const trackedItems = await getTrackedUsersAndAccounts();
+  let trackedItems = await getTrackedUsersAndAccounts();
 
   if (!trackedItems || trackedItems.length === 0) {
     console.log('No accounts currently tracked. Skipping checks.');
@@ -43,6 +47,38 @@ async function runChecks() {
     try {
       const storyResult = await checkUserStoriesFn(igPage, username);
 
+      // Handle "User not found or profile inaccessible" error from checkUserStories
+      if (storyResult.error && storyResult.error.includes('User not found or profile inaccessible')) {
+        consecutiveFailureCounts[username] = (consecutiveFailureCounts[username] || 0) + 1;
+        console.warn(`User ${username} not found (attempt ${consecutiveFailureCounts[username]}/${MAX_CONSECUTIVE_FAILURES}).`);
+
+        if (consecutiveFailureCounts[username] >= MAX_CONSECUTIVE_FAILURES) {
+          console.log(`User ${username} has failed ${MAX_CONSECUTIVE_FAILURES} consecutive checks. Attempting global removal...`);
+          const removalResult = await removeTrackedAccountGlobally(username);
+          if (removalResult.success) {
+            console.log(`Successfully initiated global removal for ${username}. ${removalResult.count} entries targeted.`);
+            // No longer need to track failures for this user as it should be gone
+            delete consecutiveFailureCounts[username];
+            // Remove from current accountsToFetch to avoid further processing this cycle
+            delete accountsToFetch[username]; 
+            // Optionally, re-fetch trackedItems or filter it here to reflect immediate removal
+            // For simplicity, we'll let it be naturally excluded in the next full runChecks cycle
+          } else {
+            console.error(`Failed to globally remove ${username}. It will be retried. Error: ${removalResult.error}`);
+            // Keep in consecutiveFailureCounts to retry removal
+          }
+        }
+        continue; // Skip to the next username
+      } else if (storyResult.error) {
+        // Some other error occurred during checkUserStories
+        console.error(`An error occurred checking stories for ${username} (not a user-not-found issue): ${storyResult.error}`);
+        // Reset failure count for this specific error type, as it might be transient (e.g. network glitch)
+        consecutiveFailureCounts[username] = 0; 
+      } else {
+        // Successfully checked (even if no stories), reset failure count
+        consecutiveFailureCounts[username] = 0;
+      }
+      
       if (storyResult.hasStories && storyResult.items.length > 0) {
         for (const story of storyResult.items) {
           const storyId = `${username}_${story.id}`; // Use unique story ID from Instagram
@@ -72,13 +108,18 @@ async function runChecks() {
             // console.log(`Story ID ${storyId} for ${username} already processed this session.`);
           }
         }
-      } else {
-        // console.log(`No new stories for ${username} or error: ${storyResult.error || 'N/A'}`);
+      } else if (!storyResult.error) { // Only log "no new stories" if there wasn't an error already handled
+        // console.log(`No new stories for ${username}.`);
       }
     } catch (error) {
-      console.error(`Error during story check for ${username}:`, error);
+      console.error(`Critical error during story check loop for ${username}:`, error);
+       // Reset failure count as this is a loop error, not specific to user validity
+      consecutiveFailureCounts[username] = 0; 
     }
-    await igPage.waitForTimeout(Math.random() * 2000 + 1000); // Small delay between checking different profiles
+    // Only delay if the account was processed (not skipped due to removal queue)
+    if (accountsToFetch[username]) {
+        await igPage.waitForTimeout(Math.random() * 2000 + 1000); // Small delay between checking different profiles
+    }
   }
   console.log('Finished current round of story checks.');
 }

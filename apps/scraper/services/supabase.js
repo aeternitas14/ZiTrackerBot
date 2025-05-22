@@ -33,4 +33,29 @@ async function getTrackedUsersAndAccounts() {
   }));
 }
 
-module.exports = { supabase, getTrackedUsersAndAccounts }; // Export supabase client and the new function 
+async function removeTrackedAccountGlobally(instagramUsername) {
+  console.log(`Attempting to globally remove ${instagramUsername} from tracked_accounts...`);
+  const { data, error } = await supabase
+    .from('tracked_accounts')
+    .delete()
+    .eq('instagram_username', instagramUsername);
+
+  if (error) {
+    console.error(`Error globally removing ${instagramUsername}:`, error);
+    return { success: false, error };
+  }
+
+  if (data && data.length > 0) {
+    console.log(`Successfully removed ${data.length} instance(s) of ${instagramUsername} from tracked_accounts.`);
+  } else if (data && data.length === 0) {
+    // This case might occur if the account was already removed by another process
+    // or if the .eq match didn't find anything (which shouldn't happen if we are calling this after a check)
+    console.log(`No instances of ${instagramUsername} found to remove. It might have been removed already.`);
+  } else {
+    // data is null or undefined, implies an issue if no error was thrown
+    console.log(`Globally removed ${instagramUsername}. Response data was null/undefined, but no error reported.`);
+  }
+  return { success: true, count: data ? data.length : 0 };
+}
+
+module.exports = { supabase, getTrackedUsersAndAccounts, removeTrackedAccountGlobally }; // Export supabase client and the new function 

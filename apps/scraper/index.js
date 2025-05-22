@@ -184,8 +184,27 @@ async function checkUserStories(currentPage, username) { // Renamed page to curr
     console.log('Fetching user info from:', userInfoApiUrl);
     const userInfoResponse = await currentPage.evaluate(async ({url, headers}) => {
         const response = await fetch(url, { headers });
-        return response.json();
+        const text = await response.text(); // Get response as text first
+        try {
+            return JSON.parse(text); // Try to parse as JSON
+        } catch (e) {
+            // If JSON parsing fails, it might be an HTML page (e.g., user not found)
+            // Return an object indicating this, so the calling code can handle it
+            return { error: 'Failed to parse JSON. Might be HTML.', htmlContent: text.substring(0, 200) }; 
+        }
     }, { url: userInfoApiUrl, headers: igHeaders });
+
+    // Check if we got an error object from evaluate (meaning JSON parsing failed)
+    if (userInfoResponse.error) {
+        console.warn(`Failed to get valid JSON for ${username}. Instagram might have returned HTML (e.g., user not found or page requires login). Details: ${userInfoResponse.error} - HTML starts: ${userInfoResponse.htmlContent}`);
+        // Return a specific structure indicating user not found or error, so monitor can skip
+        return {
+            hasStories: false,
+            count: 0,
+            items: [],
+            error: `User ${username} not found or profile inaccessible.`
+        };
+    }
 
     if (!userInfoResponse.data?.user?.id) {
       console.error('User ID not found in API response for', username, 'Response:', userInfoResponse);
@@ -272,7 +291,7 @@ async function loginToInstagram() {
 
   console.log('Launching browser for login...');
   browser = await chromium.launch({ 
-    headless: false, // Keep false for debugging, true for production
+    headless: false, // Set to false for visual browser
     args: ['--disable-blink-features=AutomationControlled']
   });
   const context = await browser.newContext({
